@@ -1,0 +1,20 @@
+{
+  "manifest_version": 2,
+
+  "name": "お店クリッパー",
+  "description": "気になるお店をクリップ",
+  "version": "1.0.4",
+
+  "permissions": [
+    "tabs",
+    "https://script.google.com/",
+    "clipboardRead"
+  ],
+  "icons": {
+    "48": "img/icon48.png"
+  },
+  "browser_action": {
+    "default_icon": "img/icon.png",
+    "default_popup": "popup.html"
+  }
+}

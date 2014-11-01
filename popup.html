@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <title>Shop Clipper Popup</title>
+    <link href="css/common.css" media="all" rel="stylesheet">
+    <script src="popup.js"></script>
+  </head>
+  <body>
+    <p id="status">行きたい度を選択してください<p>
+    <p>
+      <div class="caption">行きたい度</div>
+      <div id="vote-container" style="background-image: url('img/unselected.png');">
+        <div id="vote-stars">
+          <a href="javascript:void(0);" rate="1"></a>
+          <a href="javascript:void(0);" rate="2"></a>
+          <a href="javascript:void(0);" rate="3"></a>
+          <a href="javascript:void(0);" rate="4"></a>
+          <a href="javascript:void(0);" rate="5"></a>
+        </div>
+        <div id="vote-wrapper" style="background-image: url('img/selected.png');"></div>
+      </div>
+      <div style="margin: 5px;"></div>
+      <div id="category-container">
+        <div class="caption">ジャンル</div>
+        <div class="input-form">
+          <input type="textbox" id="input-categories">
+        </div>
+      </div>
+    </p>
+    <p>
+      <a href="javascript:void(0);" id="save-to-clipboard">クリップボードにコピー</a>
+    </p>
+  </body>
+</html>

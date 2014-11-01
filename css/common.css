@@ -1,0 +1,32 @@
+@charset "utf-8";
+
+body {
+  min-width: 195px;
+  overflow-x: hidden;
+}
+
+#vote-container {
+  position: relative;
+  width:110px;
+  height: 22px;
+  background-repeat: repeat-x;
+}
+
+#vote-stars {
+  width: 110px;
+  height: 22px;
+}
+
+#vote-stars a {
+  width: 22px;
+  height:22px;
+  display:inline-block;
+}
+
+#vote-wrapper {
+  position: absolute;
+  top:0;
+  height: 22px;
+  background-repeat: repeat-x;
+  z-index: 1;
+}
