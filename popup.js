@@ -1,8 +1,15 @@
 /* chrome extension: shopClipper */
+/*
+  todo & issues
+  ・HTTPリクエストを送信中に、レーティング、カテゴリ変更、新規のHTTPリクエストイベントを発生させることができてしまう
+  →HTTPリクエスト中（キープレスイベントまたはマウスクリックイベント時はイベント発生させないようにしたい
+*/
 
-// common
-const STAR_IMAGE_WIDTH  = 22;
+// global
+const GOOGLE_APP_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzCGe6OrEJEuvpefuNzNuofYtM3e3g4ndI8SHiXrSBzLxDQ8x8s/exec";
+const DEBUG_MODE            = true;
 
+var global = {};
 var popup = {};
 popup.close = function(){
   setTimeout(function(){
@@ -10,8 +17,10 @@ popup.close = function(){
   }, 1300);
 }
 
+// class define
 var Status = function(){
   this.element = document.getElementById("status");
+
   this.setDefaultText = function(){
     this.element.innerHTML = "行きたい度を選択してください";
   }
@@ -20,43 +29,120 @@ var Status = function(){
   }
 }
 
-// methods
-function http_request(type, url, query){
-  var READYSTATE = {
+var Rate = function(){
+  const STAR_IMAGE_WIDTH = 22;
+  const DEFAULT_RATE     = 1;
+  this.element = document.getElementById("vote-wrapper");
+  this.__construct = function(element){
+    element.style.width = DEFAULT_RATE * STAR_IMAGE_WIDTH + "px";
+  }(this.element);
+  this.get = function(){
+    return Math.round(Number(this.element.style.width.replace(/px/g, "")) / STAR_IMAGE_WIDTH);
+  }
+  this.set = function(currentXpos){
+      this.element.style.width = this.calc(currentXpos) * STAR_IMAGE_WIDTH + "px";
+  }
+  this.calc = function(currentXpos){
+    var rate = Math.round(currentXpos / STAR_IMAGE_WIDTH);
+    if(rate > 5){
+      rate = 5;
+    }
+    else if(rate < 1){
+      rate = 1;
+    }
+    return rate;    
+  }
+}
+
+var Category = function(){
+    const CATEGORY_ITEM_MAX = 5;
+    this.element = document.getElementById("input-categories");
+    this.get = function(){
+      return this.element.value;
+    }
+    this.set = function(category){
+      this.element.value = category;
+    }
+    this.update = function(){
+        var category = this.get();
+        this.set(this.normalize(category));
+    }
+    this.normalize = function(raw_category){
+      var category = raw_category;
+      if(category.length > 0){
+        category = category.replace(/　/g, " ").trim();
+        category = category.split(" ").filter(function(x, i, self){
+          return self.indexOf(x) === i;
+        });
+        if(category.length > CATEGORY_ITEM_MAX){
+          global.status.setText("カテゴリの設定は"+CATEGORY_ITEM_MAX+"個までです");
+          category = category.slice(0, CATEGORY_ITEM_MAX);
+        }
+        category = category.join(" ");
+        category = category.trim();
+      }
+      return category;
+    }
+}
+
+var Http = function(){
+  const READYSTATE = {
     UNINITIALIZED : 0,
     LOADING       : 1,
     LOADED        : 2,
     INTERACTIVE   : 3,
     COMPLETE      : 4,
   }
-
-  var HTTP_STATUS_CODE  = {
+  const HTTP_STATUS_CODE  = {
     SUCCESS: 200,
   }
-
   var xhr  = new XMLHttpRequest();
   var sync = true;
 
-  xhr.onreadystatechange = function(){
-    var status = new Status();
-    switch(this.readyState){
+  this.request = function(type, url, query){
+    xhr.onreadystatechange = this.readyStateChange;
+    this.requestSelector(type, url, query);
+    return true;
+  }
+  this.requestSelector = function(type, url, query){
+    type = type.toUpperCase();
+    switch(type){
+      case "GET":
+        xhr.open(type, this.buildQuery(url, query), sync);
+        xhr.send();
+      break;
+
+      case "POST":
+        xhr.open(type, url, sync);
+        xhr.setRequestHeader('Content-Type','application/x-www-form-urlencoded');
+        xhr.send(encodeURIComponent(query));
+      break;
+
+      default:
+      break;
+    }
+  }
+  this.readyStateChange = function(){
+    var readyState = this.readyState;
+    var statusCode = this.status;
+    switch(readyState){
       case READYSTATE.LOADING:
-        status.setText("読み込み中...");
+        global.status.setText("読み込み中...");
       break;
 
       case READYSTATE.COMPLETE:
-        if(this.status == HTTP_STATUS_CODE.SUCCESS){
+        if(statusCode == HTTP_STATUS_CODE.SUCCESS){
           var response = JSON.parse(this.responseText);
           if(response.success){
-            status.setText("お店情報をクリップしました");
+            global.status.setText("お店情報をクリップしました");
             popup.close();
           }
           else{
-            status.setText(response.error.reason);
+            global.status.setText(response.error.reason);
           }
         }
         else{
-          status.setText("アクセス出来ませんでした"+" (status_code:" + this.status +")");
+          global.status.setText("アクセス出来ませんでした"+" (status_code:" + statusCode +")");
         }
       break;
 
@@ -64,39 +150,19 @@ function http_request(type, url, query){
       break;
     };
   }
-
-  type = type.toUpperCase();
-  switch(type){
-    case "GET":
-      xhr.open(type, build_query(url, query), sync);
-      xhr.send();
-    break;
-
-    case "POST":
-      xhr.open(type, url, sync);
-      xhr.setRequestHeader('Content-Type','application/x-www-form-urlencoded');
-      xhr.send(encodeURIComponent(query));
-    break;
-
-    default:
-      // undefined method
-    break;
+  this.buildQuery = function(host, params){
+    var query = "";
+    for(var key in params) {
+      query += encodeURIComponent(key) + "=" + encodeURIComponent(params[key]) + "&";
+    }
+    if (query.length > 0){
+      query = "?" + query.substring(0, query.length-1);
+    }
+    return host+query;
   }
-  return true;
 }
 
-function build_query(host, params){
-  var query = "";
-  for(var key in params) {
-    query += encodeURIComponent(key) + "=" + encodeURIComponent(params[key]) + "&";
-  }
-  if (query.length > 0){
-    query = "?" + query.substring(0, query.length-1);
-  }
-  return host+query;  
-}
-
-function save_to_clipboard(text){
+function saveToClipboard(text){
   var textarea = document.createElement("textarea");
   textarea.setAttribute("display", "none");
   textarea.setAttribute("height", "0");
@@ -109,80 +175,41 @@ function save_to_clipboard(text){
   return true; 
 }
 
-function calc_rate_value(currentXpos){
-  var rate = Math.round(currentXpos / STAR_IMAGE_WIDTH);
-  if(rate > 5){
-    rate = 5;
-  }
-  else if(rate < 1){
-    rate = 1;
-  }
-  return rate;
-}
-
-function normalize_category(raw_category){
-  var status = new Status();
-  var category = raw_category;
-  status.setDefaultText(); 
-
-  if(category.length > 0){
-    category = category.replace(/　/g, " ").trim();
-    category = category.split(" ").filter(function(x, i, self){
-      return self.indexOf(x) === i;
-    });
-    if(category.length > 5){
-      status.setText("カテゴリの設定は5個までです");
-      category = category.slice(0, 5);
-    }
-    category = category.join(" ");
-  }
-  else{
-    category = "";
-  }
-  return category.trim();
-}
-
 document.addEventListener('DOMContentLoaded', function (){
-  var google_app_script_url = "https://script.google.com/macros/s/AKfycbzCGe6OrEJEuvpefuNzNuofYtM3e3g4ndI8SHiXrSBzLxDQ8x8s/exec";
-
   chrome.tabs.query({active: true, currentWindow: true}, function(tabs){
     var currentTab = tabs[0];
 
-    // initialize rate
-    document.getElementById("vote-wrapper").style.width = STAR_IMAGE_WIDTH + "px";
+    // setup
+    global.status = new Status();
+    var rate      = new Rate();
+    var category  = new Category();
+    var http      = new Http();
 
     // addEventListener
     document.getElementById("save-to-clipboard").addEventListener("click", function(){
-      var status = new Status();
-      status.setText("クリップボードにコピー中です...");
-      save_to_clipboard(currentTab.title+" "+currentTab.url);
-      status.setText("クリップボードにコピーしました");
+      global.status.setText("クリップボードにコピー中です...");
+      saveToClipboard(currentTab.title+" "+currentTab.url);
+      global.status.setText("クリップボードにコピーしました");
       popup.close();
     }, false);
 
     document.getElementById("vote-container").addEventListener("mousemove", function(e){
-      var vote_wrapper_element = document.getElementById("vote-wrapper");
-      vote_wrapper_element.style.width = calc_rate_value(e.clientX) * STAR_IMAGE_WIDTH + "px";
+      rate.set(e.clientX);
+    }, false);
+
+    document.getElementById("vote-container").addEventListener("click", function(e){
+      http.request("GET", GOOGLE_APP_SCRIPT_URL, {rate: rate.get(), title: currentTab.title, url: currentTab.url, category: category.get(), debug: DEBUG_MODE});
     }, false);
 
     document.getElementById("input-categories").addEventListener("blur", function(e){
-      this.value = normalize_category(this.value);
-    });
+      global.status.setDefaultText();
+      category.update();
+    }, false);
 
     document.getElementById("input-categories").addEventListener("keypress", function(e){
       if(e.keyCode === 13){
-        var rate             = Math.round(Number(document.getElementById("vote-wrapper").style.width.replace(/px/g, "")) / STAR_IMAGE_WIDTH);
-        var category_element = document.getElementById("input-categories");
-        category_element.value = normalize_category(category_element.value);
-        http_request("GET", google_app_script_url, {rate: rate, title: currentTab.title, url: currentTab.url, category: category_element.value});
+        http.request("GET", GOOGLE_APP_SCRIPT_URL, {rate: rate.get(), title: currentTab.title, url: currentTab.url, category: category.get(), debug: DEBUG_MODE});
       }
-    });
-
-    document.getElementById("vote-container").addEventListener("click", function(e){
-      var rate             = calc_rate_value(e.clientX);
-      var category_element = document.getElementById("input-categories");
-      category_element.value = normalize_category(category_element.value);
-      http_request("GET", google_app_script_url, {rate: rate, title: currentTab.title, url: currentTab.url, category: category_element.value});
     }, false);
   });
 });
